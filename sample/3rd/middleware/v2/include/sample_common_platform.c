@@ -229,8 +229,8 @@ CVI_S32 SAMPLE_PLAT_VPSS_INIT(VPSS_GRP VpssGrp, SIZE_S stSizeIn, SIZE_S stSizeOu
 	astVpssChnAttr[VpssChn].u32Height                   = stSizeOut.u32Height;
 	astVpssChnAttr[VpssChn].enVideoFormat               = VIDEO_FORMAT_LINEAR;
 	astVpssChnAttr[VpssChn].enPixelFormat               = SAMPLE_PIXEL_FORMAT;
-	astVpssChnAttr[VpssChn].stFrameRate.s32SrcFrameRate = 30;
-	astVpssChnAttr[VpssChn].stFrameRate.s32DstFrameRate = 30;
+	astVpssChnAttr[VpssChn].stFrameRate.s32SrcFrameRate = 15;
+	astVpssChnAttr[VpssChn].stFrameRate.s32DstFrameRate = 15;
 	astVpssChnAttr[VpssChn].u32Depth                    = 0;
 	astVpssChnAttr[VpssChn].bMirror                     = CVI_TRUE;
 	astVpssChnAttr[VpssChn].bFlip                       = CVI_TRUE;

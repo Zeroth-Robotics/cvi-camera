@@ -20,42 +20,21 @@
 
 static volatile bool bExit = false;
 
-static cvtdl_face_t g_stFaceMeta = {0};
-
-static uint32_t g_size = 0;
-
-MUTEXAUTOLOCK_INIT(ResultMutex);
-
 typedef struct {
   SAMPLE_TDL_MW_CONTEXT *pstMWContext;
-  cvitdl_service_handle_t stServiceHandle;
-} SAMPLE_TDL_VENC_THREAD_ARG_S;
+} SAMPLE_VENC_THREAD_ARG_S;
 
 void *run_venc(void *args) {
   printf("Enter encoder thread\n");
-  SAMPLE_TDL_VENC_THREAD_ARG_S *pstArgs = (SAMPLE_TDL_VENC_THREAD_ARG_S *)args;
+  SAMPLE_VENC_THREAD_ARG_S *pstArgs = (SAMPLE_VENC_THREAD_ARG_S *)args;
   VIDEO_FRAME_INFO_S stFrame;
   CVI_S32 s32Ret;
-  cvtdl_face_t stFaceMeta = {0};
 
   while (bExit == false) {
     s32Ret = CVI_VPSS_GetChnFrame(0, 0, &stFrame, 2000);
     if (s32Ret != CVI_SUCCESS) {
       printf("CVI_VPSS_GetChnFrame chn0 failed with %#x\n", s32Ret);
       break;
-    }
-
-    {
-      MutexAutoLock(ResultMutex, lock);
-      CVI_TDL_CopyFaceMeta(&g_stFaceMeta, &stFaceMeta);
-    }
-
-    s32Ret = CVI_TDL_Service_FaceDrawRect(pstArgs->stServiceHandle, &stFaceMeta, &stFrame, false,
-                                          CVI_TDL_Service_GetDefaultBrush());
-    if (s32Ret != CVI_TDL_SUCCESS) {
-      CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
-      printf("Draw fame fail!, ret=%x\n", s32Ret);
-      goto error;
     }
 
     s32Ret = SAMPLE_TDL_Send_Frame_RTSP(&stFrame, pstArgs->pstMWContext);
@@ -66,58 +45,12 @@ void *run_venc(void *args) {
     }
 
   error:
-    CVI_TDL_Free(&stFaceMeta);
     CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
     if (s32Ret != CVI_SUCCESS) {
       bExit = true;
     }
   }
   printf("Exit encoder thread\n");
-  pthread_exit(NULL);
-}
-
-void *run_tdl_thread(void *pHandle) {
-  printf("Enter TDL thread\n");
-  cvitdl_handle_t pstTDLHandle = (cvitdl_handle_t)pHandle;
-
-  VIDEO_FRAME_INFO_S stFrame;
-  cvtdl_face_t stFaceMeta = {0};
-
-  CVI_S32 s32Ret;
-  while (bExit == false) {
-    s32Ret = CVI_VPSS_GetChnFrame(0, VPSS_CHN1, &stFrame, 2000);
-
-    if (s32Ret != CVI_SUCCESS) {
-      printf("CVI_VPSS_GetChnFrame failed with %#x\n", s32Ret);
-      goto get_frame_failed;
-    }
-
-    s32Ret = CVI_TDL_ScrFDFace(pstTDLHandle, &stFrame, &stFaceMeta);
-    if (s32Ret != CVI_TDL_SUCCESS) {
-      printf("inference failed!, ret=%x\n", s32Ret);
-      goto inf_error;
-    }
-
-    if (stFaceMeta.size != g_size) {
-      printf("face count: %d\n", stFaceMeta.size);
-      g_size = stFaceMeta.size;
-    }
-
-    {
-      MutexAutoLock(ResultMutex, lock);
-      CVI_TDL_CopyFaceMeta(&stFaceMeta, &g_stFaceMeta);
-    }
-
-  inf_error:
-    CVI_VPSS_ReleaseChnFrame(0, 1, &stFrame);
-  get_frame_failed:
-    CVI_TDL_Free(&stFaceMeta);
-    if (s32Ret != CVI_SUCCESS) {
-      bExit = true;
-    }
-  }
-
-  printf("Exit TDL thread\n");
   pthread_exit(NULL);
 }
 
@@ -131,14 +64,6 @@ static void SampleHandleSig(CVI_S32 signo) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    printf(
-        "\nUsage: %s RETINA_MODEL_PATH.\n\n"
-        "\tRETINA_MODEL_PATH, path to retinaface model.\n",
-        argv[0]);
-    return CVI_TDL_FAILURE;
-  }
-
   signal(SIGINT, SampleHandleSig);
   signal(SIGTERM, SampleHandleSig);
 
@@ -172,7 +97,7 @@ int main(int argc, char *argv[]) {
       .u32Height = 720,
   };
 
-  stMWConfig.stVBPoolConfig.u32VBPoolCount = 3;
+  stMWConfig.stVBPoolConfig.u32VBPoolCount = 2;
 
   // VBPool 0 for VPSS Grp0 Chn0
   stMWConfig.stVBPoolConfig.astVBPoolSetup[0].enFormat = VI_PIXEL_FORMAT;
@@ -191,13 +116,7 @@ int main(int argc, char *argv[]) {
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].bBind = true;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32VpssChnBinding = VPSS_CHN1;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32VpssGrpBinding = (VPSS_GRP)0;
-
-  // VBPool 2 for TDL preprocessing
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[2].enFormat = PIXEL_FORMAT_BGR_888_PLANAR;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[2].u32BlkCount = 1;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[2].u32Height = 720;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[2].u32Width = 1280;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[2].bBind = false;
+  // stMWConfig.stVBPoolConfig.astVBPoolSetup[1].s32DstFrameRate = 15;
 
   // Setup VPSS Grp0
   stMWConfig.stVPSSPoolConfig.u32VpssGrpCount = 1;
@@ -237,39 +156,15 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  cvitdl_handle_t stTDLHandle = NULL;
-
-  // Create TDL handle and assign VPSS Grp1 Device 0 to TDL SDK
-  GOTO_IF_FAILED(CVI_TDL_CreateHandle2(&stTDLHandle, 1, 0), s32Ret, create_tdl_fail);
-
-  GOTO_IF_FAILED(CVI_TDL_SetVBPool(stTDLHandle, 0, 2), s32Ret, create_service_fail);
-
-  CVI_TDL_SetVpssTimeout(stTDLHandle, 1000);
-
-  cvitdl_service_handle_t stServiceHandle = NULL;
-  GOTO_IF_FAILED(CVI_TDL_Service_CreateHandle(&stServiceHandle, stTDLHandle), s32Ret,
-                 create_service_fail);
-
-  GOTO_IF_FAILED(CVI_TDL_OpenModel(stTDLHandle, CVI_TDL_SUPPORTED_MODEL_SCRFDFACE, argv[1]), s32Ret,
-                 setup_tdl_fail);
-
-  pthread_t stVencThread, stTDLThread;
-  SAMPLE_TDL_VENC_THREAD_ARG_S args = {
+  pthread_t stVencThread;
+  SAMPLE_VENC_THREAD_ARG_S args = {
       .pstMWContext = &stMWContext,
-      .stServiceHandle = stServiceHandle,
   };
 
   pthread_create(&stVencThread, NULL, run_venc, &args);
-  pthread_create(&stTDLThread, NULL, run_tdl_thread, stTDLHandle);
 
   pthread_join(stVencThread, NULL);
-  pthread_join(stTDLThread, NULL);
 
-setup_tdl_fail:
-  CVI_TDL_Service_DestroyHandle(stServiceHandle);
-create_service_fail:
-  CVI_TDL_DestroyHandle(stTDLHandle);
-create_tdl_fail:
   SAMPLE_TDL_Destroy_MW(&stMWContext);
 
   return 0;

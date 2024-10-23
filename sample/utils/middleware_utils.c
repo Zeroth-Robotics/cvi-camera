@@ -62,7 +62,7 @@ void SAMPLE_TDL_Get_Input_Config(SAMPLE_COMM_CHN_INPUT_CONFIG_S *pstInCfg) {
   pstInCfg->gop = DEF_264_GOP;
   pstInCfg->maxIprop = CVI_H26X_MAX_I_PROP_DEFAULT;
   pstInCfg->minIprop = CVI_H26X_MIN_I_PROP_DEFAULT;
-  pstInCfg->bitrate = 8000;
+  pstInCfg->bitrate = 4000;
   pstInCfg->firstFrmstartQp = 30;
   pstInCfg->minIqp = DEF_264_MINIQP;
   pstInCfg->maxIqp = DEF_264_MAXIQP;
@@ -99,6 +99,8 @@ PIC_SIZE_E SAMPLE_TDL_Get_PIC_Size(CVI_S32 width, CVI_S32 height) {
     return PIC_3840x2160;
   } else if (width == 2560 && height == 1440) {
     return PIC_1440P;
+  } else if (width == 720 && height == 480) {
+    return PIC_720P;
   } else {
     return PIC_BUTT;
   }
